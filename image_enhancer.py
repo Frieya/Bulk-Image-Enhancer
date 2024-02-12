@@ -1,11 +1,11 @@
 import argparse
-from PIL import Image,ImageEnhance
 from pydantic import BaseModel
 from collections import deque
 from threading import *
 import glob
 import os
 import time
+from PIL import Image,ImageEnhance
 
 class Enhancement(BaseModel):
         brightness_factor: int = 1
@@ -32,7 +32,8 @@ class BulkImageEnhancer():
         gif_image_list = glob.glob(os.path.join(self.input_dir,'*.gif'))
         return deque([*png_image_list, *jpg_image_list, *gif_image_list])
 
-    def enhance_image(original_image, enhancement: Enhancement):
+    def enhance_image(self, original_image):
+        enhancement = self.enhancement_factors
         brightness_enhancer = ImageEnhance.Brightness(original_image)
         brightness_image = brightness_enhancer.enhance(enhancement.brightness_factor) 
         contrast_enhancer = ImageEnhance.Contrast(brightness_image)
@@ -43,18 +44,18 @@ class BulkImageEnhancer():
 
     def process_image(self, input_image: str, output_image: str):
         image = Image.open(input_image)
-        enhance_image = enhance_image(image, self.enhancement_factors)
-        enhance_image.save(output_image)
+        enhanced_image = self.enhance_image(image)
+        enhanced_image.save(output_image)
 
     def get_image_to_process(self, thread_name):
         while True:
             self.get_from_queue.acquire()
-            if self.image_list.count != 0:
-                input_image = self.image_list.pop()
-                self.get_from_queue.release()
-            else:
+            if len(self.image_list) == 0:
                 self.get_from_queue.release()
                 return True
+            else:
+                input_image = self.image_list.pop()
+                self.get_from_queue.release()
             image_name = os.path.basename(input_image)
             output_image = os.path.join(self.output_dir, f"enhanced_{image_name}")
             self.process_image(input_image, output_image)
@@ -75,7 +76,7 @@ def parse_args():
 if __name__ == "__main__":
     args =  parse_args()
     bulk_enhancer = BulkImageEnhancer(args)
-    enhancer_threads = [Thread(target = bulk_enhancer.get_image_to_process, args = (f'Thread-{idx}',)) for idx in range(args.num_threads)]
+    enhancer_threads = [Thread(target = bulk_enhancer.get_image_to_process, args = (f'Thread-{idx}',)) for idx in range(int(args.num_threads))]
     start_time = time.perf_counter()
     for thread in enhancer_threads:
         thread.start()
