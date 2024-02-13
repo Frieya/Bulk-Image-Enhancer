@@ -7,6 +7,8 @@ import os
 import time
 from PIL import Image,ImageEnhance
 
+Image.MAX_IMAGE_PIXELS = None
+
 class Enhancement(BaseModel):
         brightness_factor: int = 1
         contrast_factor: int = 1
