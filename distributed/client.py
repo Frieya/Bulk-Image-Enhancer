@@ -1,5 +1,4 @@
 import argparse
-from pydantic import BaseModel
 from multiprocessing import Process, Queue
 import glob
 import os
@@ -9,14 +8,16 @@ from multiprocessing import set_start_method
 import pika
 import uuid
 from io import BytesIO
-
+import json
+import base64
 Image.MAX_IMAGE_PIXELS = None
 
 
 class ImageEnhanceRpcClient(object):
     def __init__(self):
-        self.connection = pika.BlockingConnection(
-            pika.ConnectionParameters(host='localhost'))
+        self.credentials = pika.PlainCredentials("rabbituser", "rabbit1234")
+
+        self.connection = pika.BlockingConnection(pika.ConnectionParameters("172.17.0.1", 5672, "/", self.credentials))
 
         self.channel = self.connection.channel()
 
@@ -45,16 +46,21 @@ class ImageEnhanceRpcClient(object):
                 reply_to=self.callback_queue,
                 correlation_id=self.corr_id,
             ),
-            body=message)
+            body=json.dumps(message))
         while self.response is None:
             self.connection.process_data_events(time_limit=None)
         return self.response
     
 class BulkImageEnhancer():
     def __init__(self, args) -> None:
-        self.args = args
-        self.input_dir = args.input_dir
-        self.output_dir = args.output_dir
+        self.args = {
+            "brightness_factor":args.brightness_factor,
+            "contrast_factor":args.contrast_factor,
+            "sharpness_factor":args.sharpness_factor
+        }
+        self.input_dir = os.path.join(os.getcwd(), args.input_dir)
+        self.output_dir =os.path.join(os.getcwd(), args.output_dir)
+        assert os.path.exists(self.input_dir)
         self.createFolderIfNotExist()
         self.image_buffer = Queue()
         self.image_count = 0
@@ -72,20 +78,21 @@ class BulkImageEnhancer():
         self.image_count = len(image_list)
         list(map(self.image_buffer.put, image_list))
     
-    def run_image_enhancer(self):
+    def run_image_enhancer(self, process_num):
         while True:
             if self.image_buffer.empty():
                 break
             image_path = self.image_buffer.get()
             image_enhance_rpc = ImageEnhanceRpcClient()
             image_name = os.path.basename(image_path)
-            output_path = os.path.join(self.args.output_dir, f"enhanced_{image_name}")
+            output_path = os.path.join(self.output_dir, f"enhanced_{image_name}")
             print(f" [x] Requesting server to enhance image {image_name}")
             with open(image_path, "rb") as image:
                 image_byte = image.read()
-            message = {'image': (image_name, image_byte, self.args)}
+            message = {'image': (image_name, base64.b64encode(image_byte).decode('utf-8'), self.args)}
             response = image_enhance_rpc.call(message)
-            enhanced_image = Image.open(BytesIO(response["image"]))
+            response = json.loads(response)
+            enhanced_image = Image.open(BytesIO(base64.b64decode(response["image"][1])))
             enhanced_image.save(output_path)
             print(f" [.] Got {response["image"][0]}")
         return True
