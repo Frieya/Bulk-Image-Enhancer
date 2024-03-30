@@ -5,10 +5,7 @@ import glob
 import os
 import time
 from PIL import Image, ImageEnhance
-from multiprocessing import set_start_method
-import Pyro4
 import io
-import base64
 import pika
 
 Image.MAX_IMAGE_PIXELS = None
@@ -17,7 +14,6 @@ class Enhancement(BaseModel):
     brightness_factor: int = 1
     contrast_factor: int = 1
     sharpness_factor: int = 1
-
 
 
 def enhance_gif( original_image, enhancement):
@@ -35,13 +31,13 @@ def enhance_gif( original_image, enhancement):
     gif_buffer = io.BytesIO()
     enhanced_frames[0].save(gif_buffer, save_all=True, append_images=enhanced_frames[1:], loop=0)
     gif_buffer.seek(0)
-    return base64.b64encode(gif_buffer.getvalue())
+    return gif_buffer.getvalue()
 
 def enhance_image(original_image, enhancement):
     enhanced_image = apply_enhancements(original_image, enhancement)
     img_buffer = io.BytesIO()
     enhanced_image.save(img_buffer, format='JPEG') 
-    return base64.b64encode(img_buffer.getvalue())
+    return img_buffer.getvalue()
 
 def apply_enhancements(image, enhancement):
     brightness_enhancer = ImageEnhance.Brightness(image)
@@ -59,18 +55,14 @@ def process_image(self, image, filename,  args):
             contrast_factor=args.contrast_factor,
             sharpness_factor=args.sharpness_factor
             )
-    if image.format=='GIF':
-        enhanced = self.enhance_gif(image, enhancement_factors)
-    else:
-        enhanced = self.enhance_image(image, enhancement_factors) 
+
+    enhanced = self.enhance_image(image, enhancement_factors) 
     message = {
-        "enhanced_image": enhanced,
-        "filename": filename
+        "image": (filename, enhanced, args)
     } 
+    return message
             
  
-
-
 connection = pika.BlockingConnection(
     pika.ConnectionParameters(host='localhost'))
 
@@ -78,19 +70,15 @@ channel = connection.channel()
 
 channel.queue_declare(queue='rpc_queue')
 
-def fib(n):
-    if n == 0:
-        return 0
-    elif n == 1:
-        return 1
-    else:
-        return fib(n - 1) + fib(n - 2)
 
 def on_request(ch, method, props, body):
-    n = int(body)
+    image_body = body["image"]
+    filename = image_body[0]
+    image = Image.open(io.BytesIO(image_body[1]))
+    args = image_body[2]
 
     print(f" [.] fib({n})")
-    response = fib(n)
+    response = process_image(image, filename, args)
 
     ch.basic_publish(exchange='',
                      routing_key=props.reply_to,
