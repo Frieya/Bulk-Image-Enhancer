@@ -92,9 +92,9 @@ class BulkImageEnhancer():
             message = {'image': (image_name, base64.b64encode(image_byte).decode('utf-8'), self.args)}
             response = image_enhance_rpc.call(message)
             response = json.loads(response)
-            enhanced_image = Image.open(BytesIO(base64.b64decode(response["image"][1])))
-            enhanced_image.save(output_path)
-            print(f" [.] Got {response["image"][0]}")
+            with open(output_path, "wb") as enhanced_image:
+                enhanced_image.write(base64.b64decode(response["image"][1]))
+            print(f" [.] Got {response['image'][0]}")
         return True
     
     def __repr__(self) -> str:
