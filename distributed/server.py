@@ -31,7 +31,7 @@ def enhance_gif( original_image, enhancement):
     except EOFError:
         pass  
     gif_buffer = io.BytesIO()
-    enhanced_frames[0].save(gif_buffer, save_all=True, append_images=enhanced_frames[1:], loop=0)
+    enhanced_frames[0].save(gif_buffer, format="GIF", save_all=True, append_images=enhanced_frames[1:], loop=0)
     gif_buffer.seek(0)
     return gif_buffer.getvalue()
 
@@ -58,8 +58,10 @@ def process_image(image, filename, args):
             contrast_factor=args["contrast_factor"],
             sharpness_factor=args["sharpness_factor"]
             )
-    
-    enhanced = enhance_image(image, enhancement_factors) 
+    if ".gif" in filename:
+        enhanced = enhance_gif(image, enhancement_factors)
+    else:
+        enhanced = enhance_image(image, enhancement_factors) 
     message = {
         "image": (filename, base64.b64encode(enhanced).decode('utf-8'), args)
     } 
