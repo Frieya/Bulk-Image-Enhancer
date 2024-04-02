@@ -70,7 +70,7 @@ def process_image(image, filename, args):
  
 credentials = pika.PlainCredentials("rabbituser", "rabbit1234")
 
-connection = pika.BlockingConnection(pika.ConnectionParameters("172.17.0.1", 5672, "/", credentials))
+connection = pika.BlockingConnection(pika.ConnectionParameters(host="0.0.0.0", port=5672, virtual_host="/", credentials=credentials))
 
 channel = connection.channel()
 
@@ -102,5 +102,4 @@ channel.start_consuming()
 
 print(" [x] Awaiting RPC requests")
 channel.start_consuming()
-
 
