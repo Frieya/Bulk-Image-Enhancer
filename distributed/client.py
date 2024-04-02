@@ -17,7 +17,7 @@ class ImageEnhanceRpcClient(object):
     def __init__(self):
         self.credentials = pika.PlainCredentials("rabbituser", "rabbit1234")
 
-        self.connection = pika.BlockingConnection(pika.ConnectionParameters("172.17.0.1", 5672, "/", self.credentials))
+        self.connection = pika.BlockingConnection(pika.ConnectionParameters(host="10.2.201.128", port=5672, virtual_host="/", credentials=self.credentials))
 
         self.channel = self.connection.channel()
 
